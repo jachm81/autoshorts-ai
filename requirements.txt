@@ -1,0 +1,24 @@
+# ==============================================================================
+# Dependencias de Python para AutoShorts AI
+# ==============================================================================
+
+# Framework Web asíncrono y servidor ASGI
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Procesamiento de subida de archivos multipart/form-data
+python-multipart>=0.0.12
+aiofiles>=24.1.0
+
+# SDK Oficial de Google GenAI para análisis de video con Gemini 3 Flash
+google-genai>=1.0.0
+
+# Transcripción de audio automática a nivel de palabras/segmentos
+openai-whisper>=20231117
+
+# Validación de esquemas y configuración de entorno
+pydantic>=2.9.2
+pydantic-settings>=2.5.2
+
+# Utilidades HTTP y manejo de medios
+requests>=2.32.3
