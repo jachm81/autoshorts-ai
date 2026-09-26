@@ -22,3 +22,5 @@ pydantic-settings>=2.5.2
 
 # Utilidades HTTP y manejo de medios
 requests>=2.32.3
+yt-dlp
+yt-dlp
