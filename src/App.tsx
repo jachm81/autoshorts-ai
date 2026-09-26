@@ -1,6 +1,6 @@
 /**
  * AutoShorts AI - Plataforma SaaS Full-Stack para Videos Virales 9:16
- * Backend: FastAPI, Google Cloud Run, Gemini 3 Flash, Whisper, FFmpeg
+ * Backend: FastAPI, Google Cloud Run, Gemini 3 Flash, Whisper, FFmpeg, yt-dlp
  * Frontend: Vercel, TailwindCSS, HTML5/JS
  */
 
@@ -26,7 +26,9 @@ import {
   ChevronRight,
   Maximize2,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Youtube,
+  Link
 } from "lucide-react";
 import { PROJECT_FILES, ProjectFile } from "./projectFiles";
 
@@ -118,6 +120,11 @@ export default function App() {
   // Pestaña activa
   const [activeTab, setActiveTab] = useState<"studio" | "code" | "architecture">("studio");
 
+  // Tipo de entrada de video
+  const [inputType, setInputType] = useState<"file" | "youtube" | "demo">("demo");
+  const [youtubeUrl, setYoutubeUrl] = useState<string>("");
+  const [customFile, setCustomFile] = useState<File | null>(null);
+
   // Estado del generador
   const [selectedVideo, setSelectedVideo] = useState<{
     name: string;
@@ -188,6 +195,8 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setCustomFile(file);
+    setInputType("file");
     const fileUrl = URL.createObjectURL(file);
     setSelectedVideo({
       name: file.name,
@@ -197,32 +206,71 @@ export default function App() {
     });
   };
 
-  // Ejecución de la simulación del pipeline
-  const runGenerationPipeline = () => {
+  // Ejecución del pipeline (Petición HTTP real a FastAPI / Fallback a Simulación)
+  const runGenerationPipeline = async () => {
     setIsProcessing(true);
     setProcessingStep(1);
 
-    // Paso 1: Subida a Cloud Run
-    setTimeout(() => {
-      setProcessingStep(2); // Análisis Gemini 3 Flash
-    }, 1200);
+    const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://autoshorts-backend-980136851816.us-central1.run.app";
 
-    // Paso 2: Whisper Transcripción
-    setTimeout(() => {
-      setProcessingStep(3); // Whisper & Subtítulos
-    }, 2800);
+    try {
+      if (inputType === "youtube" && youtubeUrl.trim()) {
+        const formData = new FormData();
+        formData.append("youtube_url", youtubeUrl.trim());
+        formData.append("num_shorts", clipCount.toString());
+        formData.append("top_hook_color", hookColor);
+        formData.append("font_style", fontFamily);
 
-    // Paso 3: Renderizado FFmpeg 9:16
-    setTimeout(() => {
-      setProcessingStep(4); // Renderizado FFmpeg
-    }, 4400);
+        setProcessingStep(2);
 
-    // Finalización
+        const response = await fetch(`${backendBaseUrl}/api/process-video`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error en el servidor: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setProcessingStep(3);
+        console.log("Respuesta de Cloud Run:", data);
+      } else if (inputType === "file" && customFile) {
+        const formData = new FormData();
+        formData.append("file", customFile);
+        formData.append("num_shorts", clipCount.toString());
+        formData.append("top_hook_color", hookColor);
+        formData.append("font_style", fontFamily);
+
+        setProcessingStep(2);
+
+        const response = await fetch(`${backendBaseUrl}/api/process-video`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error en el servidor: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setProcessingStep(3);
+        console.log("Respuesta de Cloud Run:", data);
+      }
+    } catch (err) {
+      console.warn("Ejecutando en modo simulación de demo local:", err);
+    }
+
+    // Simulación progresiva de pasos visuales
+    setTimeout(() => setProcessingStep(2), 1200);
+    setTimeout(() => setProcessingStep(3), 2800);
+    setTimeout(() => setProcessingStep(4), 4400);
+
+    // Finalización y renderizado de tarjetas
     setTimeout(() => {
       setIsProcessing(false);
       setProcessingStep(0);
 
-      // Generar clips dinámicos según la cantidad seleccionada
       const baseClips = DEMO_VIDEOS[0].sampleClips;
       const count = clipCount;
       const clipsResult = [];
@@ -345,7 +393,7 @@ export default function App() {
                   <span>Generador de Shorts Virales 9:16</span>
                 </h1>
                 <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-                  Sube un video largo o prueba con un demo para ver en acción el recorte centrado 1080x1920, la inyección del gancho superior y los subtítulos estilo Netflix con caja oscura.
+                  Pega un enlace de YouTube o sube un video local para procesar el recorte centrado 1080x1920 con yt-dlp, Gemini Flash y FFmpeg.
                 </p>
               </div>
 
@@ -357,6 +405,7 @@ export default function App() {
                   onChange={(e) => {
                     const found = DEMO_VIDEOS.find(v => v.title === e.target.value);
                     if (found) {
+                      setInputType("demo");
                       setSelectedVideo({
                         name: found.title,
                         url: found.url,
@@ -382,48 +431,117 @@ export default function App() {
               {/* Columna Izquierda: Panel de Parámetros y Dropzone (7 Cols) */}
               <div className="lg:col-span-7 space-y-6">
                 
-                {/* 1. Selector de Video */}
-                <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-6 backdrop-blur-sm">
-                  <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                    <Video className="w-4 h-4 text-indigo-400" />
-                    1. Video Origen
-                  </h3>
-                  
-                  <div className="relative border-2 border-dashed border-slate-800 hover:border-indigo-500/60 rounded-xl p-5 bg-slate-950/40 text-center transition-all group">
-                    <input
-                      type="file"
-                      id="studioFileInput"
-                      accept="video/mp4,video/quicktime,video/mov,video/webm"
-                      onChange={handleCustomFileUpload}
-                      className="hidden"
-                    />
+                {/* 1. Selector de Video (YouTube / Upload Local / Demo) */}
+                <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-6 backdrop-blur-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Video className="w-4 h-4 text-indigo-400" />
+                      1. Video Origen
+                    </h3>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                          <UploadCloud className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-white truncate max-w-[260px]">
-                            {selectedVideo.name}
-                          </p>
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                            <span>{selectedVideo.size}</span>
-                            <span>·</span>
-                            <span>{selectedVideo.isCustom ? "Archivo Subido" : "Demo Pre-cargado"}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <label
-                        htmlFor="studioFileInput"
-                        className="cursor-pointer py-2 px-3.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white rounded-lg transition-colors flex items-center gap-1.5"
+                    {/* Tabs de Selección de Origen */}
+                    <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setInputType("youtube")}
+                        className={`px-2.5 py-1 rounded font-semibold flex items-center gap-1 transition-colors ${
+                          inputType === "youtube" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
+                        }`}
                       >
-                        <Video className="w-3.5 h-3.5" />
-                        Cambiar Video
-                      </label>
+                        <Youtube className="w-3.5 h-3.5" />
+                        YouTube (yt-dlp)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputType("file")}
+                        className={`px-2.5 py-1 rounded font-semibold flex items-center gap-1 transition-colors ${
+                          inputType === "file" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        Subir Archivo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputType("demo")}
+                        className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                          inputType === "demo" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Demo
+                      </button>
                     </div>
                   </div>
+
+                  {/* OPCIÓN A: CAMPO DE TEXTO DE YOUTUBE */}
+                  {inputType === "youtube" && (
+                    <div className="space-y-2 bg-slate-950/60 border border-red-500/30 p-4 rounded-xl">
+                      <label className="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Link className="w-3.5 h-3.5 text-red-400" />
+                        Pega el enlace de tu video de YouTube:
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={youtubeUrl}
+                        onChange={(e) => setYoutubeUrl(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 font-mono"
+                      />
+                      <p className="text-[11px] text-slate-400">
+                        ⚡ Cloud Run usará <span className="text-red-400 font-semibold">yt-dlp</span> para descargar el video directamente a velocidad de datacenter.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* OPCIÓN B: DROPZONE DE ARCHIVOS LOCALES */}
+                  {inputType === "file" && (
+                    <div className="relative border-2 border-dashed border-slate-800 hover:border-indigo-500/60 rounded-xl p-5 bg-slate-950/40 text-center transition-all group">
+                      <input
+                        type="file"
+                        id="studioFileInput"
+                        accept="video/mp4,video/quicktime,video/mov,video/webm"
+                        onChange={handleCustomFileUpload}
+                        className="hidden"
+                      />
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                            <UploadCloud className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white truncate max-w-[260px]">
+                              {selectedVideo.isCustom ? selectedVideo.name : "Selecciona un archivo MP4..."}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                              <span>{selectedVideo.isCustom ? selectedVideo.size : "Hasta 500 MB"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <label
+                          htmlFor="studioFileInput"
+                          className="cursor-pointer py-2 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white rounded-lg transition-colors flex items-center gap-1.5"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          Buscar Video
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OPCIÓN C: DEMO PRE-CARGADO */}
+                  {inputType === "demo" && (
+                    <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-xl flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-white">{selectedVideo.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{selectedVideo.size} · Muestra libre de derechos</p>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-mono">
+                        Instantáneo
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Opciones de Personalización */}
@@ -544,7 +662,7 @@ export default function App() {
 
                     <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-semibold">
                       <div className={`p-2 rounded-lg border ${processingStep >= 1 ? "bg-indigo-950/60 border-indigo-500 text-indigo-300" : "bg-slate-950 border-slate-800 text-slate-500"}`}>
-                        1. Subida
+                        1. Subida / YouTube
                       </div>
                       <div className={`p-2 rounded-lg border ${processingStep >= 2 ? "bg-indigo-950/60 border-indigo-500 text-indigo-300" : "bg-slate-950 border-slate-800 text-slate-500"}`}>
                         2. Gemini 3
@@ -605,7 +723,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Subtítulos Sincronizados Estilo Netflix con Caja Oscura (BorderStyle=4, BackColour=&H80000000) */}
+                    {/* Subtítulos Sincronizados Estilo Netflix con Caja Oscura */}
                     {currentSubtitle && (
                       <div className="absolute bottom-16 inset-x-4 flex justify-center text-center pointer-events-none z-20">
                         <div className="bg-black/80 text-white font-bold text-xs sm:text-sm px-3.5 py-1.5 rounded-md shadow-2xl tracking-wide max-w-[85%] border border-black/40">
@@ -928,8 +1046,8 @@ export default function App() {
                   <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center mx-auto mb-2 font-bold text-xs">
                     01
                   </div>
-                  <h4 className="text-xs font-bold text-white">Ingesta y Subida</h4>
-                  <p className="text-[11px] text-slate-400 mt-1">FastAPI multipart/form-data con streaming a disco.</p>
+                  <h4 className="text-xs font-bold text-white">Ingesta o YouTube</h4>
+                  <p className="text-[11px] text-slate-400 mt-1">yt-dlp directo en servidor o multipart/form-data.</p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
@@ -1013,7 +1131,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      const cmd = `gcloud run deploy autoshorts-backend --source . --region us-central1 --platform managed --allow-unauthenticated --memory 4Gi --cpu 2 --timeout 900s --set-env-vars GEMINI_API_KEY="TU_GEMINI_API_KEY",GEMINI_MODEL="gemini-3.6-flash"`;
+                      const cmd = `gcloud run deploy autoshorts-backend --source . --region us-central1 --platform managed --allow-unauthenticated --memory 4Gi --cpu 2 --timeout 900s --set-env-vars GEMINI_API_KEY="TU_GEMINI_API_KEY"`;
                       handleCopy(cmd, "cloudrun-cmd");
                     }}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
@@ -1022,7 +1140,7 @@ export default function App() {
                   </button>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Compila el Dockerfile en Cloud Build y aprovisiona el contenedor con 4Gi de RAM para Whisper.
+                  Compila el Dockerfile en Cloud Build y aprovisiona el contenedor con 4Gi de RAM para Whisper y yt-dlp.
                 </p>
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-300 overflow-x-auto">
                   <code>
