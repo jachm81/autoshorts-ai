@@ -115,8 +115,8 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
 
-  // Endpoint apuntando a la ruta exacta definida en FastAPI (/process-video)
-  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/process-video';
+  // Endpoint corregido a la ruta exacta del backend (/process)
+  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/process';
 
   const validateYoutubeUrl = (url: string) => {
     const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(.*)?$/;
@@ -177,7 +177,8 @@ export default function App() {
       console.log('Sending request to Cloud Run backend:', BACKEND_ENDPOINT, requestPayload);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000);
+      // Timeout ampliado a 10 minutos (600,000 ms) para tareas pesadas
+      const timeoutId = setTimeout(() => controller.abort(), 600000);
 
       const response = await fetch(BACKEND_ENDPOINT, {
         method: 'POST',
@@ -886,7 +887,7 @@ export default function App() {
               <p>
                 El procesamiento pesado (yt-dlp, whisper y ffmpeg) se ejecuta en:{' '}
                 <span className="text-slate-300 font-mono break-all">
-                  https://autoshorts-backend-980136851816.us-central1.run.app/process-video
+                  https://autoshorts-backend-980136851816.us-central1.run.app/process
                 </span>
               </p>
             </div>
