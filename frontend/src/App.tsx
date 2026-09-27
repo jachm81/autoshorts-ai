@@ -115,8 +115,8 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
 
-  // Backend Cloud Run endpoint specified by user
-  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/process-youtube';
+  // Backend Cloud Run endpoint corregido
+  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/process';
 
   const validateYoutubeUrl = (url: string) => {
     const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(.*)?$/;
@@ -149,7 +149,6 @@ export default function App() {
     setProgressPercent(15);
     setProcessingStep('Iniciando conexión con el backend en Cloud Run...');
 
-    // Progress updates simulation to guide user through backend pipeline
     const interval = setInterval(() => {
       setProgressPercent((prev) => {
         if (prev < 40) {
@@ -178,7 +177,7 @@ export default function App() {
       console.log('Sending request to Cloud Run backend:', BACKEND_ENDPOINT, requestPayload);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 min timeout for video processing
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
 
       const response = await fetch(BACKEND_ENDPOINT, {
         method: 'POST',
@@ -202,13 +201,11 @@ export default function App() {
       const data = await response.json();
       console.log('Backend response received:', data);
 
-      // Handle backend response format
       if (data.shorts && Array.isArray(data.shorts) && data.shorts.length > 0) {
         setResults(data.shorts);
       } else if (Array.isArray(data)) {
         setResults(data);
       } else {
-        // Fallback representation if structure varies slightly
         const fallbackShorts: GeneratedShort[] = Array.from({ length: numShorts }).map((_, idx) => ({
           id: `short-${idx + 1}`,
           title: `Short Viral #${idx + 1}: ${data.title || 'Momento de Alto Impacto'}`,
@@ -226,25 +223,12 @@ export default function App() {
       clearInterval(interval);
       console.warn('Backend request notice:', err);
 
-      // Check if network error or CORS or Cloud Run timeout
       const isNetworkOrCors = err.name === 'AbortError' || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError');
 
       if (isNetworkOrCors) {
         setErrorMessage(
-          'El backend en Cloud Run tardó en responder o bloqueó la solicitud CORS desde el navegador. Para que puedas ver el resultado inmediato de la interfaz y la estructura de Shorts generada, se ha habilitado la vista previa de muestra.'
+          'El backend en Cloud Run tardó en responder o se interrumpió la conexión. Intenta de nuevo o verifica los logs de Google Cloud Run.'
         );
-        // Provide realistic demo output so the user can verify the UI and workflow
-        const demoShorts: GeneratedShort[] = Array.from({ length: numShorts }).map((_, idx) => ({
-          id: `demo-${idx + 1}`,
-          title: `Short #${idx + 1}: Gancho de Retención Máxima`,
-          hook_text: idx === 0 ? 'EL SECRETO QUE NADIE TE CUENTA 🤫' : idx === 1 ? 'NUNCA HAGAS ESTO EN 2026 🚨' : 'ESTO CAMBIÓ MI VIDA POR COMPLETO 🔥',
-          duration: `${40 + idx * 6}s`,
-          timestamp: `0${idx * 2 + 1}:20 - 0${idx * 2 + 2}:05`,
-          virality_score: 95 - idx * 2,
-          thumbnail_url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=80',
-          transcript_preview: 'En el momento en que descubrí esta estrategia, el algoritmo comenzó a disparar las impresiones de manera exponencial...',
-        }));
-        setResults(demoShorts);
       } else {
         setErrorMessage(err.message || 'Ocurrió un error inesperado al procesar el video de YouTube.');
       }
@@ -319,7 +303,7 @@ export default function App() {
 
         {/* Studio Grid: Config Form & Live Simulator */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Form & Parameter Controls (7 cols) */}
+          {/* Left Column: Form & Parameter Controls */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl space-y-6">
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -355,7 +339,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Sample URLs pills for quick testing */}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <span className="text-[11px] text-slate-400">Probar con ejemplo:</span>
                     {SAMPLE_YOUTUBE_URLS.map((sample, i) => (
@@ -371,7 +354,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 2. Number of Shorts Selection (1, 3, 5) */}
+                {/* 2. Number of Shorts Selection */}
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
                     <span className="flex items-center gap-2">
@@ -447,7 +430,6 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Custom color input */}
                   <div className="flex items-center gap-3 pt-1">
                     <span className="text-xs text-slate-400">Personalizado:</span>
                     <div className="flex items-center gap-2 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
@@ -617,7 +599,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Column: Live 9:16 Mockup Simulator & Specs (5 cols) */}
+          {/* Right Column: Live 9:16 Mockup Simulator */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
               <div className="flex items-center justify-between">
@@ -634,18 +616,15 @@ export default function App() {
 
               {/* Mobile Phone Mockup */}
               <div className="mx-auto w-[270px] sm:w-[290px] aspect-[9/16] bg-black rounded-[36px] p-3 border-4 border-slate-800 shadow-2xl relative flex flex-col justify-between overflow-hidden">
-                {/* Background Image / Gradient Simulation */}
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-950 to-black opacity-90" />
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#ff0055_1px,transparent_1px)] [background-size:16px_16px]" />
 
-                {/* Camera punch hole */}
                 <div className="relative z-20 flex justify-center pt-1">
                   <div className="w-16 h-4 bg-slate-900/90 rounded-full flex items-center justify-center">
                     <div className="w-2.5 h-2.5 rounded-full bg-slate-950 border border-slate-800" />
                   </div>
                 </div>
 
-                {/* Top Hook Banner */}
                 <div className="relative z-10 px-2 pt-4">
                   <div
                     className="p-2.5 rounded-xl shadow-lg text-center transform transition-all duration-200"
@@ -664,7 +643,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Center Audio Waves / Video Simulation */}
                 <div className="relative z-10 my-auto text-center space-y-2 px-3">
                   <div className="w-12 h-12 mx-auto rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
                     <Play className="w-5 h-5 text-white fill-white ml-0.5" />
@@ -683,9 +661,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Subtitle Box Simulation */}
                 <div className="relative z-10 px-2 pb-6 text-center space-y-3">
-                  {/* Dynamic Subtitle Style Rendering */}
                   {subtitleStyle === 'karaoke' && (
                     <div
                       className="text-base sm:text-lg font-black tracking-tight leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
@@ -740,7 +716,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* UI overlay badges */}
                   <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-white/10">
                     <span className="font-mono">Shorts: {numShorts}</span>
                     <span className="font-semibold text-rose-400">@autoshorts</span>
@@ -748,7 +723,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Param Summary Card */}
               <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 text-xs space-y-2 text-slate-400">
                 <div className="font-semibold text-slate-300 flex items-center justify-between">
                   <span>Parámetros Seleccionados</span>
@@ -780,7 +754,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Results Section: Generated Shorts Gallery */}
+        {/* Results Section */}
         {results.length > 0 && (
           <section className="space-y-6 pt-4 animate-fadeIn">
             <div className="flex items-center justify-between">
@@ -805,7 +779,6 @@ export default function App() {
                   className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700 transition flex flex-col justify-between"
                 >
                   <div className="p-5 space-y-4">
-                    {/* Header info */}
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
                         Clip #{idx + 1}
@@ -816,9 +789,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Short Card Mock Thumbnail */}
                     <div className="relative aspect-[9/12] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex flex-col justify-between p-3 group">
-                      {/* Top Hook Preview */}
                       <div
                         className="px-2 py-1 rounded text-center text-xs font-black uppercase tracking-wider shadow"
                         style={{
@@ -830,18 +801,15 @@ export default function App() {
                         {short.hook_text || 'GANCHO DE RETENCIÓN'}
                       </div>
 
-                      {/* Play Button Overlay */}
                       <div className="my-auto mx-auto w-12 h-12 rounded-full bg-rose-600/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition">
                         <Play className="w-5 h-5 fill-white ml-0.5" />
                       </div>
 
-                      {/* Subtitle Snippet */}
                       <div className="bg-black/80 backdrop-blur-sm p-2 rounded text-[11px] text-center text-slate-200">
                         <p className="line-clamp-2 italic">"{short.transcript_preview}"</p>
                       </div>
                     </div>
 
-                    {/* Metadata */}
                     <div className="space-y-1">
                       <h3 className="font-bold text-sm text-white line-clamp-1">{short.title}</h3>
                       <div className="flex items-center justify-between text-[11px] text-slate-400">
@@ -855,7 +823,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="p-4 bg-slate-950/60 border-t border-slate-800/80 flex items-center gap-2">
                     {short.video_url ? (
                       <a
@@ -892,7 +859,7 @@ export default function App() {
           </section>
         )}
 
-        {/* Informational Architecture & Vercel Instructions */}
+        {/* Informational Architecture */}
         <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-2 text-slate-200">
             <Info className="w-5 h-5 text-rose-500" />
@@ -911,7 +878,7 @@ export default function App() {
               <span className="font-bold text-slate-200 block">2. Configuración en Panel de Vercel</span>
               <p>
                 <strong>Root Directory:</strong> <code className="text-amber-400 font-mono">frontend</code>.<br />
-                <strong>Framework Preset:</strong> <code className="text-emerald-400 font-mono">Vite</code> (Detección automática sin overrides).
+                <strong>Framework Preset:</strong> <code className="text-emerald-400 font-mono">Vite</code>.
               </p>
             </div>
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
@@ -919,7 +886,7 @@ export default function App() {
               <p>
                 El procesamiento pesado (yt-dlp, whisper y ffmpeg) se ejecuta en:{' '}
                 <span className="text-slate-300 font-mono break-all">
-                  https://autoshorts-backend-980136851816.us-central1.run.app/process-youtube
+                  https://autoshorts-backend-980136851816.us-central1.run.app/process
                 </span>
               </p>
             </div>
