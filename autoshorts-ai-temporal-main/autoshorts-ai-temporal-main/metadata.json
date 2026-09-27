@@ -1,7 +1,0 @@
-{
-  "name": "Herramientas SEO",
-  "description": "Suite integral de herramientas SEO: auditoría on-page en vivo, simulador SERP, generador de meta tags y OpenGraph, investigación de palabras clave, generador de Schema JSON-LD y robots.txt.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
-
