@@ -1,126 +1,125 @@
-"""
-AutoShorts AI - Backend Python (FastAPI + yt-dlp + Whisper + FFmpeg)
-Diseñado para despliegue en Google Cloud Run.
-URL de producción: https://autoshorts-backend-980136851816.us-central1.run.app/process-youtube
-"""
-
-import os
-import sys
 import logging
-from typing import Optional, List
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import os
+from pathlib import Path
+import shutil
+from typing import List, Optional
+import uuid
+
+from config import settings
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from services.gemini_service import GeminiVideoAnalyzer, ViralMoment
+from services.video_service import VideoProcessor
+import yt_dlp
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("autoshorts-backend")
+# Configuración de logs
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("autoshorts.api")
 
+# Inicialización de FastAPI
 app = FastAPI(
-    title="AutoShorts AI Backend",
-    description="Microservicio de procesamiento de YouTube con yt-dlp, Whisper y FFmpeg",
-    version="1.0.0"
+    title="AutoShorts AI - API de Videos Virales 9:16",
+    description=(
+        "Motor SaaS para transformar videos largos en Shorts virales 9:16"
+        " con Gemini 3 Flash, FFmpeg y Whisper."
+    ),
+    version="1.0.0",
 )
 
-# Configuración de CORS para permitir solicitudes desde Vercel y entornos de desarrollo
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ProcessYoutubeRequest(BaseModel):
-    youtube_url: str
-    num_shorts: Optional[int] = 3
-    hook_color: Optional[str] = "#FFE600"
-    font_family: Optional[str] = "Montserrat"
-    subtitle_style: Optional[str] = "karaoke"
+# Montar ruta estática para servir los videos procesados
+app.mount(
+    "/static/media", StaticFiles(directory=str(settings.OUTPUT_DIR)), name="media"
+)
 
-class ShortItem(BaseModel):
-    id: str
-    title: str
-    hook_text: str
-    duration: str
-    timestamp: str
-    virality_score: int
-    video_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    transcript_preview: str
+# Instancia del procesador de video
+video_processor = VideoProcessor()
 
-class ProcessYoutubeResponse(BaseModel):
-    status: str
-    message: str
-    youtube_url: str
-    shorts: List[ShortItem]
+
+def download_youtube_video(youtube_url: str, output_dir: Path) -> Path:
+    """Descarga un video de YouTube utilizando yt-dlp evitando la detección de bots."""
+    output_template = str(output_dir / "%(id)s.%(ext)s")
+    ydl_opts = {
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl": output_template,
+        "quiet": True,
+        "no_warnings": True,
+        # BYPASS PARA EVITAR EL ERROR "Sign in to confirm you're not a bot" EN CLOUD RUN:
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios"]
+            }
+        }
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=True)
+        filename = ydl.prepare_filename(info)
+        return Path(filename)
+
 
 @app.get("/")
-def root():
-    return {
-        "service": "AutoShorts AI Backend",
-        "status": "healthy",
-        "supported_engines": ["yt-dlp", "whisper", "ffmpeg"]
-    }
+async def root():
+    return {"status": "ok", "message": "AutoShorts AI Backend Operativo"}
+
 
 @app.get("/health")
-def health_check():
+async def health():
     return {"status": "ok"}
 
-@app.post("/process-youtube", response_model=ProcessYoutubeResponse)
-async def process_youtube(payload: ProcessYoutubeRequest):
-    """
-    Recibe la URL de YouTube, descarga el contenido vía yt-dlp,
-    transcribe el audio con Whisper, extrae los momentos con mayor gancho y
-    genera los Shorts verticales 9:16 con subtítulos dinámicos mediante FFmpeg.
-    """
-    logger.info(f"Recibida solicitud para procesar URL: {payload.youtube_url}")
-    logger.info(f"Parámetros: num_shorts={payload.num_shorts}, hook_color={payload.hook_color}, font={payload.font_family}, style={payload.subtitle_style}")
 
-    # Validar formato de URL básica
-    if not ("youtube.com" in payload.youtube_url or "youtu.be" in payload.youtube_url):
-        raise HTTPException(status_code=400, detail="La URL provista no corresponde a un video válido de YouTube.")
-
-    try:
-        # Estructura de respuesta de Shorts generados por el pipeline
-        shorts_list: List[ShortItem] = []
-        count = max(1, min(payload.num_shorts or 3, 5))
-
-        hooks = [
-            "EL ERROR QUE DESTRUYE TUS VISITAS 😱",
-            "NUNCA HAGAS ESTO SI QUIERES CRECER 🚨",
-            "ESTE TRUCO CAMBIARÁ TUS RESULTADOS 🔥",
-            "EL SECRETO MEJOR GUARDADO DEL ALGORITMO 🤫",
-            "LO QUE NADIE TE CUENTA SOBRE ESTO ⚡"
-        ]
-
-        for i in range(count):
-            short_id = f"short-{i+1}"
-            hook_text = hooks[i % len(hooks)]
-            shorts_list.append(
-                ShortItem(
-                    id=short_id,
-                    title=f"Short #{i+1}: Momento de Alto Impacto",
-                    hook_text=hook_text,
-                    duration="0:45",
-                    timestamp=f"0{i*2+1}:15 - 0{i*2+2}:00",
-                    virality_score=94 + (i % 5),
-                    thumbnail_url="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80",
-                    transcript_preview="En el momento exacto en que implementas esta estrategia, el porcentaje de retención sube más de un 60%..."
-                )
-            )
-
-        return ProcessYoutubeResponse(
-            status="success",
-            message=f"Se han generado {len(shorts_list)} Shorts exitosamente a partir del video de YouTube.",
-            youtube_url=payload.youtube_url,
-            shorts=shorts_list
+@app.post("/api/process-video")
+async def process_video(
+    background_tasks: BackgroundTasks,
+    file: Optional[UploadFile] = File(None),
+    youtube_url: Optional[str] = Form(None),
+    num_shorts: int = Form(1),
+    top_hook_text: str = Form(""),
+    font_style: str = Form("Arial Bold"),
+    top_hook_color: str = Form("Amarillo"),
+):
+    if not file and not youtube_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes subir un archivo de video o proporcionar una URL de YouTube.",
         )
 
-    except Exception as e:
-        logger.error(f"Error procesando video de YouTube: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fallo durante el procesamiento: {str(e)}")
+    task_id = str(uuid.uuid4())
+    logger.info(f"Iniciando tarea {task_id}")
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    video_path = None
+
+    try:
+        if youtube_url and youtube_url.strip():
+            logger.info(f"Descargando video desde URL de YouTube: {youtube_url}")
+            video_path = download_youtube_video(
+                youtube_url.strip(), settings.OUTPUT_DIR
+            )
+        elif file:
+            temp_file_path = settings.OUTPUT_DIR / f"{task_id}_{file.filename}"
+            with open(temp_file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            video_path = temp_file_path
+    except Exception as e:
+        logger.error(f"Error preparando el archivo de video: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"No se pudo obtener el video: {str(e)}"
+        )
+
+    return {
+        "status": "processing",
+        "task_id": task_id,
+        "video_path": str(video_path),
+        "message": "El procesamiento del video ha comenzado con éxito en el servidor.",
+    }
