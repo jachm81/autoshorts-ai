@@ -15,7 +15,6 @@ import {
   Type,
   Subtitles,
   ExternalLink,
-  ChevronRight,
   Info,
   ShieldCheck,
   Zap,
@@ -115,8 +114,8 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
 
-  // Endpoint alineado con main.py (/process-youtube)
-  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/process-youtube';
+  // Endpoint apuntando a la ruta exacta del backend (/api/process-video)
+  const BACKEND_ENDPOINT = 'https://autoshorts-backend-980136851816.us-central1.run.app/api/process-video';
 
   const validateYoutubeUrl = (url: string) => {
     const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(.*)?$/;
@@ -152,40 +151,36 @@ export default function App() {
     const interval = setInterval(() => {
       setProgressPercent((prev) => {
         if (prev < 40) {
-          setProcessingStep('Descargando streams de video y audio con yt-dlp...');
+          setProcessingStep('Descargando video con yt-dlp...');
           return prev + 8;
         } else if (prev < 70) {
-          setProcessingStep('Transcribiendo audio y detectando fragmentos clave con Whisper...');
+          setProcessingStep('Analizando momentos con Gemini 3 Flash...');
           return prev + 6;
         } else if (prev < 90) {
-          setProcessingStep('Enmarcando a 9:16 vertical y aplicando ganchos y subtítulos con FFmpeg...');
+          setProcessingStep('Procesando clips con FFmpeg y Whisper...');
           return prev + 3;
         }
         return prev;
       });
     }, 1800);
 
-    const requestPayload = {
-      youtube_url: cleanUrl,
-      num_shorts: numShorts,
-      hook_color: hookColor,
-      font_family: fontFamily,
-      subtitle_style: subtitleStyle,
-    };
+    // Formatear payload como FormData (ya que el backend usa Form(...))
+    const formData = new FormData();
+    formData.append('youtube_url', cleanUrl);
+    formData.append('num_shorts', numShorts.toString());
+    formData.append('top_hook_color', hookColor);
+    formData.append('font_style', fontFamily);
+    formData.append('top_hook_text', 'MOMENTO VIRAL');
 
     try {
-      console.log('Sending request to Cloud Run backend:', BACKEND_ENDPOINT, requestPayload);
+      console.log('Sending request to Cloud Run backend:', BACKEND_ENDPOINT);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600000);
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos timeout
 
       const response = await fetch(BACKEND_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestPayload),
+        body: formData, // Petición enviada como multipart/form-data
         signal: controller.signal,
       });
 
@@ -206,16 +201,17 @@ export default function App() {
       } else if (Array.isArray(data)) {
         setResults(data);
       } else {
+        // Respuesta fallback visual en caso de que el backend devuelva el status "processing"
         const fallbackShorts: GeneratedShort[] = Array.from({ length: numShorts }).map((_, idx) => ({
           id: `short-${idx + 1}`,
-          title: `Short Viral #${idx + 1}: ${data.title || 'Momento de Alto Impacto'}`,
-          hook_text: `ESTE ERROR TE ESTÁ COSTANDO DINERO 😱`,
+          title: `Short Viral #${idx + 1}: ${data.task_id || 'Procesamiento en curso'}`,
+          hook_text: `ESTE TRUCO CAMBIARÁ TUS RESULTADOS 🔥`,
           duration: '0:48',
           timestamp: `0${idx * 2 + 1}:15 - 0${idx * 2 + 2}:03`,
-          virality_score: 92 + idx,
-          video_url: data.video_url || data.output_url || undefined,
+          virality_score: 95 + idx,
+          video_url: data.video_path ? `https://autoshorts-backend-980136851816.us-central1.run.app/static/media/${data.video_path.split('/').pop()}` : undefined,
           thumbnail_url: `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80`,
-          transcript_preview: 'La mayoría de creadores ignora esto por completo. Si cambias el enfoque en los primeros 3 segundos...',
+          transcript_preview: 'El video fue recibido con éxito. El motor Gemini + FFmpeg ha iniciado el recorte automáticamente...',
         }));
         setResults(fallbackShorts);
       }
@@ -227,7 +223,7 @@ export default function App() {
 
       if (isNetworkOrCors) {
         setErrorMessage(
-          'El backend en Cloud Run tardó en responder o se interrumpió la conexión. Intenta de nuevo o verifica los logs de Google Cloud Run.'
+          'El backend en Cloud Run tardó en responder o se interrumpió la conexión. Verifica el despliegue en Google Cloud.'
         );
       } else {
         setErrorMessage(err.message || 'Ocurrió un error inesperado al procesar el video de YouTube.');
@@ -258,7 +254,7 @@ export default function App() {
                   YouTube Only
                 </span>
               </div>
-              <p className="text-xs text-slate-400 hidden sm:block">Generador Automático de Shorts Virales vía yt-dlp</p>
+              <p className="text-xs text-slate-400 hidden sm:block">Generador Automático de Shorts Virales vía Gemini 3 Flash + yt-dlp</p>
             </div>
           </div>
 
@@ -288,7 +284,7 @@ export default function App() {
         <div className="text-center max-w-3xl mx-auto space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Extracción Inteligente de Momentos Virales con yt-dlp + Whisper + FFmpeg</span>
+            <span>Extracción Inteligente con Gemini 3 Flash + yt-dlp + Whisper + FFmpeg</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
             Convierte Vídeos de YouTube en{' '}
@@ -297,13 +293,13 @@ export default function App() {
             </span>
           </h1>
           <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto">
-            Pega el enlace de cualquier vídeo o podcast de YouTube. Nuestro backend en Cloud Run descargará el audio, transcribirá y aplicará subtítulos dinámicos de alto impacto con ganchos superiores llamativos.
+            Pega el enlace de cualquier vídeo o podcast de YouTube. Nuestro backend descargará el audio, analizará los momentos virales y renderizará clips en 9:16.
           </p>
         </div>
 
-        {/* Studio Grid: Config Form & Live Simulator */}
+        {/* Studio Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Form & Parameter Controls */}
+          {/* Left Column: Form */}
           <div className="lg:col-span-7 space-y-6">
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl space-y-6">
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -354,7 +350,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 2. Number of Shorts Selection */}
+                {/* 2. Number of Shorts */}
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
                     <span className="flex items-center gap-2">
@@ -389,7 +385,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 3. Top Hook Color Picker */}
+                {/* 3. Color Picker */}
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
                     <span className="flex items-center gap-2">
@@ -429,29 +425,9 @@ export default function App() {
                       );
                     })}
                   </div>
-
-                  <div className="flex items-center gap-3 pt-1">
-                    <span className="text-xs text-slate-400">Personalizado:</span>
-                    <div className="flex items-center gap-2 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-                      <input
-                        type="color"
-                        value={hookColor}
-                        onChange={(e) => setHookColor(e.target.value)}
-                        disabled={isLoading}
-                        className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
-                      />
-                      <input
-                        type="text"
-                        value={hookColor}
-                        onChange={(e) => setHookColor(e.target.value)}
-                        disabled={isLoading}
-                        className="w-20 bg-transparent text-xs font-mono text-slate-200 uppercase focus:outline-none"
-                      />
-                    </div>
-                  </div>
                 </div>
 
-                {/* 4. Typography Selection */}
+                {/* 4. Fonts */}
                 <div className="space-y-2.5">
                   <label className="flex items-center justify-between text-sm font-semibold text-slate-200">
                     <span className="flex items-center gap-2">
@@ -564,7 +540,7 @@ export default function App() {
                 </div>
               </form>
 
-              {/* Progress Indicator */}
+              {/* Progress Bar */}
               {isLoading && (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3 animate-fadeIn">
                   <div className="flex items-center justify-between text-xs">
@@ -580,9 +556,6 @@ export default function App() {
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-tight">
-                    El backend en Cloud Run descarga el flujo con yt-dlp, transcribe con Whisper, recorta los fragmentos más atractivos y renderiza el gancho superior y los subtítulos con FFmpeg.
-                  </p>
                 </div>
               )}
 
@@ -599,7 +572,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Column: Live 9:16 Mockup Simulator */}
+          {/* Right Column: Live Mockup */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
               <div className="flex items-center justify-between">
@@ -614,7 +587,7 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Mobile Phone Mockup */}
+              {/* Phone Mockup */}
               <div className="mx-auto w-[270px] sm:w-[290px] aspect-[9/16] bg-black rounded-[36px] p-3 border-4 border-slate-800 shadow-2xl relative flex flex-col justify-between overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-950 to-black opacity-90" />
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#ff0055_1px,transparent_1px)] [background-size:16px_16px]" />
@@ -650,103 +623,19 @@ export default function App() {
                   <div className="text-[11px] text-slate-300 font-medium">
                     {youtubeUrl ? 'Vídeo de YouTube vinculado' : 'Pega una URL de YouTube'}
                   </div>
-                  <div className="flex items-center justify-center gap-1">
-                    {[35, 60, 90, 45, 80, 50, 95, 40, 70].map((h, i) => (
-                      <span
-                        key={i}
-                        className="w-1 bg-rose-500/70 rounded-full animate-pulse"
-                        style={{ height: `${h * 0.25}px`, animationDelay: `${i * 120}ms` }}
-                      />
-                    ))}
-                  </div>
                 </div>
 
                 <div className="relative z-10 px-2 pb-6 text-center space-y-3">
-                  {subtitleStyle === 'karaoke' && (
-                    <div
-                      className="text-base sm:text-lg font-black tracking-tight leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
-                      style={{ fontFamily: selectedFontObj.styleName }}
-                    >
-                      <span className="text-white">SI CAMBIAS </span>
-                      <span className="text-amber-300 underline decoration-rose-500 decoration-4">ESTE DETALLE</span>
-                      <span className="text-white"> TODO CAMBIA</span>
-                    </div>
-                  )}
-
-                  {subtitleStyle === 'box_highlight' && (
-                    <div className="inline-block bg-black/90 border border-slate-700 px-3 py-1.5 rounded-lg shadow-xl">
-                      <span
-                        className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider"
-                        style={{ fontFamily: selectedFontObj.styleName }}
-                      >
-                        🔥 El truco que usan los millonarios
-                      </span>
-                    </div>
-                  )}
-
-                  {subtitleStyle === 'gradient_glow' && (
-                    <div
-                      className="text-base sm:text-lg font-black bg-gradient-to-r from-amber-300 via-rose-400 to-red-400 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(255,0,85,0.8)]"
-                      style={{ fontFamily: selectedFontObj.styleName }}
-                    >
-                      CRECIMIENTO 10X GARANTIZADO
-                    </div>
-                  )}
-
-                  {subtitleStyle === 'bicolor_hormozi' && (
-                    <div
-                      className="text-base sm:text-lg font-black leading-tight drop-shadow-[0_4px_8px_rgba(0,0,0,1)]"
-                      style={{ fontFamily: selectedFontObj.styleName }}
-                    >
-                      <span className="text-yellow-400 [text-shadow:_0_2px_0_#000,_0_-2px_0_#000,_2px_0_0_#000,_-2px_0_0_#000]">
-                        NO COMETAS{' '}
-                      </span>
-                      <span className="text-white [text-shadow:_0_2px_0_#000,_0_-2px_0_#000,_2px_0_0_#000,_-2px_0_0_#000]">
-                        ESTE ERROR
-                      </span>
-                    </div>
-                  )}
-
-                  {subtitleStyle === 'clean_minimal' && (
-                    <div
-                      className="text-xs text-slate-200 font-medium tracking-wide bg-black/40 backdrop-blur-sm px-2 py-1 rounded inline-block"
-                      style={{ fontFamily: selectedFontObj.styleName }}
-                    >
-                      Transcripción limpia con Whisper AI
-                    </div>
-                  )}
-
+                  <div
+                    className="text-base sm:text-lg font-black tracking-tight leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                    style={{ fontFamily: selectedFontObj.styleName }}
+                  >
+                    <span className="text-white">PROCESANDO </span>
+                    <span className="text-amber-300 underline decoration-rose-500 decoration-4">CON GEMINI</span>
+                  </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-white/10">
                     <span className="font-mono">Shorts: {numShorts}</span>
                     <span className="font-semibold text-rose-400">@autoshorts</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 text-xs space-y-2 text-slate-400">
-                <div className="font-semibold text-slate-300 flex items-center justify-between">
-                  <span>Parámetros Seleccionados</span>
-                  <Sliders className="w-3.5 h-3.5 text-rose-400" />
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                  <div>
-                    <span className="text-slate-400">Cantidad:</span>{' '}
-                    <strong className="text-white">{numShorts} clips</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Gancho:</span>{' '}
-                    <span className="inline-flex items-center gap-1 font-mono text-white">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: hookColor }} />
-                      {hookColor}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Fuente:</span>{' '}
-                    <strong className="text-white">{fontFamily}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Subtítulos:</span>{' '}
-                    <strong className="text-white capitalize">{subtitleStyle.replace('_', ' ')}</strong>
                   </div>
                 </div>
               </div>
@@ -761,14 +650,14 @@ export default function App() {
               <div>
                 <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
                   <Film className="w-6 h-6 text-rose-500" />
-                  Shorts Generados Listos ({results.length})
+                  Procesamiento Iniciado ({results.length})
                 </h2>
                 <p className="text-slate-400 text-xs sm:text-sm">
-                  Clips verticales recortados y listos para publicar en YouTube Shorts, TikTok e Instagram Reels.
+                  El servidor ha recibido la solicitud y comenzó a descargar y recortar el vídeo.
                 </p>
               </div>
               <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full font-semibold">
-                Procesamiento Finalizado
+                Servidor Activo
               </span>
             </div>
 
@@ -789,37 +678,9 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="relative aspect-[9/12] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex flex-col justify-between p-3 group">
-                      <div
-                        className="px-2 py-1 rounded text-center text-xs font-black uppercase tracking-wider shadow"
-                        style={{
-                          backgroundColor: hookColor,
-                          color: hookColor === '#FFFFFF' ? '#000000' : hookColor === '#FFE600' ? '#000000' : '#FFFFFF',
-                          fontFamily: selectedFontObj.styleName,
-                        }}
-                      >
-                        {short.hook_text || 'GANCHO DE RETENCIÓN'}
-                      </div>
-
-                      <div className="my-auto mx-auto w-12 h-12 rounded-full bg-rose-600/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition">
-                        <Play className="w-5 h-5 fill-white ml-0.5" />
-                      </div>
-
-                      <div className="bg-black/80 backdrop-blur-sm p-2 rounded text-[11px] text-center text-slate-200">
-                        <p className="line-clamp-2 italic">"{short.transcript_preview}"</p>
-                      </div>
-                    </div>
-
                     <div className="space-y-1">
                       <h3 className="font-bold text-sm text-white line-clamp-1">{short.title}</h3>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Marca de tiempo:</span>
-                        <span className="font-mono text-slate-300">{short.timestamp}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Puntaje de Viralidad:</span>
-                        <span className="font-bold text-amber-400">{short.virality_score || 94}/100</span>
-                      </div>
+                      <p className="text-xs text-slate-400">{short.transcript_preview}</p>
                     </div>
                   </div>
 
@@ -827,31 +688,23 @@ export default function App() {
                     {short.video_url ? (
                       <a
                         href={short.video_url}
-                        download={`autoshorts-${idx + 1}.mp4`}
+                        target="_blank"
+                        rel="noreferrer"
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Descargar MP4</span>
+                        <span>Ver/Descargar Video</span>
                       </a>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleCopy(youtubeUrl, short.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-semibold transition"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
                       >
                         {copiedId === short.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedId === short.id ? 'Copiado' : 'Copiar Enlace'}</span>
+                        <span>{copiedId === short.id ? 'Copiado' : 'Copiar URL YouTube'}</span>
                       </button>
                     )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(short.hook_text, `hook-${short.id}`)}
-                      title="Copiar texto del gancho"
-                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700"
-                    >
-                      {copiedId === `hook-${short.id}` ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
                   </div>
                 </div>
               ))}
@@ -863,32 +716,23 @@ export default function App() {
         <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-7 space-y-4">
           <div className="flex items-center gap-2 text-slate-200">
             <Info className="w-5 h-5 text-rose-500" />
-            <h3 className="font-bold text-base">Arquitectura del Proyecto y Despliegue en Vercel</h3>
+            <h3 className="font-bold text-base">Arquitectura Conectada</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-400">
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
-              <span className="font-bold text-slate-200 block">1. Frontend React/Vite (/frontend)</span>
+              <span className="font-bold text-slate-200 block">1. Endpoint Activo</span>
               <p>
-                Aislado por completo en <code className="text-rose-400 font-mono">/frontend</code> con su propio{' '}
-                <code className="text-slate-300">package.json</code>, <code className="text-slate-300">vite.config.ts</code> y{' '}
-                <code className="text-slate-300">tsconfig.json</code>.
+                Petición POST multipart/form-data conectada a:{' '}
+                <code className="text-amber-400 font-mono break-all">/api/process-video</code>
               </p>
             </div>
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
-              <span className="font-bold text-slate-200 block">2. Configuración en Panel de Vercel</span>
-              <p>
-                <strong>Root Directory:</strong> <code className="text-amber-400 font-mono">frontend</code>.<br />
-                <strong>Framework Preset:</strong> <code className="text-emerald-400 font-mono">Vite</code>.
-              </p>
+              <span className="font-bold text-slate-200 block">2. Motores en Servidor</span>
+              <p>Gemini 3 Flash + yt-dlp + FFmpeg + Whisper.</p>
             </div>
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-1.5">
-              <span className="font-bold text-slate-200 block">3. Backend en Python (Cloud Run)</span>
-              <p>
-                El procesamiento pesado (yt-dlp, whisper y ffmpeg) se ejecuta en:{' '}
-                <span className="text-slate-300 font-mono break-all">
-                  https://autoshorts-backend-980136851816.us-central1.run.app/process-youtube
-                </span>
-              </p>
+              <span className="font-bold text-slate-200 block">3. Estado del Backend</span>
+              <p>https://autoshorts-backend-980136851816.us-central1.run.app/api/process-video</p>
             </div>
           </div>
         </section>
@@ -896,7 +740,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950 py-6 text-center text-xs text-slate-500">
-        <p>AutoShorts AI &bull; Estructura reestructurada para Vercel + Cloud Run Python Backend.</p>
+        <p>AutoShorts AI &bull; Vercel Frontend + Cloud Run FastAPI Backend.</p>
       </footer>
     </div>
   );
