@@ -2,35 +2,21 @@ import os
 from pathlib import Path
 import sys
 from typing import Optional
+import logging
 
-# ==============================================================================
-# 1. Ajuste de sys.path (Garantiza la resolución de módulos sin ModuleNotFoundError)
-# ==============================================================================
 BACKEND_DIR = Path(__file__).resolve().parent
-PARENT_DIR = BACKEND_DIR.parent
-
-# Se inserta backend/ al inicio de sys.path para importaciones directas (ej: "import config")
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-
-# Se inserta la raíz al sys.path por compatibilidad
-if str(PARENT_DIR) not in sys.path:
-    sys.path.insert(1, str(PARENT_DIR))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Importaciones directas (sin usar 'backend.' para evitar fallos de resolución)
 from config import settings
-from services.gemini_service import GeminiVideoAnalyzer
+from services.youtube_service import YouTubeDownloader, YouTubeBotDetectionError
 from services.video_service import VideoProcessor
-from services.youtube_service import (
-    YouTubeBotDetectionError,
-    YouTubeDownloader,
-    YouTubeError,
-    YouTubeUnavailableError,
-)
+
+logger = logging.getLogger("autoshorts.api")
 
 app = FastAPI(title="AutoShorts AI Backend")
 
@@ -93,49 +79,22 @@ async def process_video(
             "message": "El procesamiento del video ha comenzado con éxito en el servidor.",
         }
 
-    # Control de excepciones específico (Evita el Error HTTP 500)
     except YouTubeBotDetectionError as e:
+        logger.warning(f"Bloqueo de bot interceptado limpiamente: {e}")
         raise HTTPException(
             status_code=422,
             detail={
                 "status": "error",
-                "error_type": e.error_type,
-                "message": e.user_friendly_message,
-                "suggestion": "Sube el archivo de video directamente para evitar la verificación de bot de Cloud Run.",
-            },
-        )
-    except YouTubeUnavailableError as e:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "status": "error",
-                "error_type": e.error_type,
-                "message": e.user_friendly_message,
-            },
-        )
-    except YouTubeError as e:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "status": "error",
-                "error_type": e.error_type,
-                "message": e.user_friendly_message,
+                "error_type": "YOUTUBE_BOT_BLOCKED",
+                "message": e.user_message,
+                "suggestion": "Sube el archivo de video (.mp4) directamente para evitar la verificación de bot de Cloud Run.",
             },
         )
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error preparando el archivo de video: {e}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "status": "error",
-                "message": f"Error interno en el servidor: {str(e)}",
-            },
+            detail={"error_type": "SERVER_ERROR", "message": f"Error interno: {str(e)}"},
         )
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
