@@ -1,33 +1,19 @@
-import logging
 import os
+import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional, Dict, Any
 import yt_dlp
 
 logger = logging.getLogger("autoshorts.youtube")
 
-# Excepciones tipadas para evitar HTTP 500 genéricos
-class YouTubeError(Exception):
-    def __init__(self, message: str, user_friendly_message: str, error_type: str = "YOUTUBE_ERROR"):
-        super().__init__(message)
-        self.user_friendly_message = user_friendly_message
-        self.error_type = error_type
-
-class YouTubeBotDetectionError(YouTubeError):
+class YouTubeBotDetectionError(Exception):
+    """Excepción específica cuando YouTube exige verificación de bot."""
     def __init__(self, raw_message: str):
-        super().__init__(
-            raw_message,
-            "YouTube ha bloqueado la IP de Cloud Run solicitando verificación de bot ('Sign in to confirm you're not a bot'). "
-            "Por favor, descarga el video en tu equipo y sube el archivo directamente.",
-            error_type="YOUTUBE_BOT_DETECTION"
-        )
-
-class YouTubeUnavailableError(YouTubeError):
-    def __init__(self, raw_message: str):
-        super().__init__(
-            raw_message,
-            "El video de YouTube no está disponible (puede ser privado, eliminado o con restricción de edad).",
-            error_type="YOUTUBE_UNAVAILABLE"
+        super().__init__(raw_message)
+        self.user_message = (
+            "YouTube ha bloqueado la descarga desde la IP del servidor exigiendo verificación humana "
+            "('Sign in to confirm you're not a bot'). Por favor, descarga el video en tu equipo "
+            "y súbelo directamente usando la pestaña 'Subir Archivo (.mp4)'."
         )
 
 class YouTubeDownloader:
@@ -40,11 +26,11 @@ class YouTubeDownloader:
         clean_url = youtube_url.strip()
         output_template = str(self.output_dir / f"{session_id}_yt_%(id)s.%(ext)s")
 
-        # Clientes con rotación para evitar el bloqueo de Cloud Run
-        clients_order = [["android", "ios"], ["mweb"], ["tv_embedded"]]
+        clients_order = [["ios"], ["android"], ["mweb"]]
         last_exception = None
 
         for client_group in clients_order:
+            logger.info(f"Intentando descargar con player_client: {client_group}...")
             ydl_opts: Dict[str, Any] = {
                 "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                 "outtmpl": output_template,
@@ -56,11 +42,11 @@ class YouTubeDownloader:
                 "extractor_args": {
                     "youtube": {
                         "player_client": client_group,
-                        "skip": ["hls", "dash"]
+                        "skip": ["webpage", "configs", "hls"]
                     }
                 },
                 "http_headers": {
-                    "User-Agent": "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip"
+                    "User-Agent": "com.google.ios.youtube/19.09.3 (iPhone14,5; U; CPU iOS 17_4 like Mac OS X) gzip"
                 }
             }
 
@@ -70,20 +56,17 @@ class YouTubeDownloader:
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(clean_url, download=True)
-                    downloaded_file = ydl.prepare_filename(info)
-                    mp4_file = str(Path(downloaded_file).with_suffix(".mp4"))
-                    if os.path.exists(mp4_file):
-                        return mp4_file
-                    return downloaded_file
+                    downloaded = ydl.prepare_filename(info)
+                    mp4_file = str(Path(downloaded).with_suffix(".mp4"))
+                    return mp4_file if os.path.exists(mp4_file) else downloaded
             except yt_dlp.utils.DownloadError as e:
                 err_msg = str(e)
                 last_exception = e
                 if "Sign in to confirm" in err_msg or "bot" in err_msg.lower():
-                    continue  # Intenta con el siguiente cliente
-                if "unavailable" in err_msg.lower() or "private" in err_msg.lower():
-                    raise YouTubeUnavailableError(err_msg)
+                    continue
+                raise
 
         err_str = str(last_exception)
         if "confirm you're not a bot" in err_str.lower() or "bot" in err_str.lower():
             raise YouTubeBotDetectionError(err_str)
-        raise YouTubeError(err_str, "Fallo al descargar video de YouTube.", "YOUTUBE_DOWNLOAD_FAILED")
+        raise RuntimeError(err_str)
