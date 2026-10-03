@@ -63,15 +63,16 @@ def download_youtube_video(youtube_url: str, output_dir: Path) -> Path:
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": True,
-        # CLIENTES MÓVILES PARA EVITAR BLOQUEO DE BOT EN DATA CENTER
+        # BYPASS DE BOT PARA DATACENTERS / CLOUD RUN:
         "extractor_args": {
             "youtube": {
-                "player_client": ["android_creator", "android_embedded", "ios"]
+                "player_client": ["android", "ios", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "com.google.android.youtube/17.36.37 (Linux; U; Android 12; gms) gzip"
-        }
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=True)
