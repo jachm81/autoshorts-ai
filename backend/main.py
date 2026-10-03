@@ -4,17 +4,34 @@ import sys
 from typing import Optional
 import logging
 
+# 1. Configurar sys.path dinámicamente antes de cualquier importación local
 BACKEND_DIR = Path(__file__).resolve().parent
+PARENT_DIR = BACKEND_DIR.parent
+
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(PARENT_DIR) not in sys.path:
+    sys.path.insert(1, str(PARENT_DIR))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import settings
-from services.youtube_service import YouTubeDownloader, YouTubeBotDetectionError
-from services.video_service import VideoProcessor
+# 2. Importaciones de módulos locales (sys.path garantizará que encuentre config.py)
+try:
+    from config import settings
+except ModuleNotFoundError:
+    from backend.config import settings
+
+try:
+    from services.youtube_service import YouTubeDownloader, YouTubeBotDetectionError
+except ModuleNotFoundError:
+    from backend.services.youtube_service import YouTubeDownloader, YouTubeBotDetectionError
+
+try:
+    from services.video_service import VideoProcessor
+except ModuleNotFoundError:
+    from backend.services.video_service import VideoProcessor
 
 logger = logging.getLogger("autoshorts.api")
 
@@ -98,3 +115,10 @@ async def process_video(
             status_code=500,
             detail={"error_type": "SERVER_ERROR", "message": f"Error interno: {str(e)}"},
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
