@@ -3,8 +3,6 @@ FROM python:3.11-slim
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-
-# Solución al ModuleNotFoundError:
 ENV PYTHONPATH="/app/backend:/app:${PYTHONPATH}"
 
 WORKDIR /app
