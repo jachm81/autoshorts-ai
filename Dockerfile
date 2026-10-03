@@ -1,16 +1,21 @@
 FROM python:3.11-slim
 
-# Instalar FFmpeg y dependencias del sistema requeridas por yt-dlp y whisper
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Solución al ModuleNotFoundError:
+ENV PYTHONPATH="/app/backend:/app:${PYTHONPATH}"
 
 WORKDIR /app
 
-# Garantiza que Python encuentre config.py y los módulos del backend
-ENV PYTHONPATH=/app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    fonts-liberation \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
