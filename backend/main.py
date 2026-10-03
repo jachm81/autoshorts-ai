@@ -5,13 +5,20 @@ import shutil
 from typing import List, Optional
 import uuid
 
-from config import settings
+# Importación híbrida para solucionar el ModuleNotFoundError
+try:
+    from config import settings
+    from services.gemini_service import GeminiVideoAnalyzer, ViralMoment
+    from services.video_service import VideoProcessor
+except ModuleNotFoundError:
+    from backend.config import settings
+    from backend.services.gemini_service import GeminiVideoAnalyzer, ViralMoment
+    from backend.services.video_service import VideoProcessor
+
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from services.gemini_service import GeminiVideoAnalyzer, ViralMoment
-from services.video_service import VideoProcessor
 import yt_dlp
 
 # Configuración de logs
@@ -56,11 +63,14 @@ def download_youtube_video(youtube_url: str, output_dir: Path) -> Path:
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": True,
-        # BYPASS PARA EVITAR EL ERROR "Sign in to confirm you're not a bot" EN CLOUD RUN:
+        # BYPASS PARA EVITAR EL ERROR EN CLOUD RUN:
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios"]
+                "player_client": ["android", "ios", "mweb"]
             }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
         }
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
