@@ -3,12 +3,17 @@ from pathlib import Path
 import sys
 from typing import Optional
 
-# 1. Bootstrap de Rutas (Elimina definitivamente el ModuleNotFoundError)
+# ==============================================================================
+# 1. Ajuste de sys.path (Garantiza la resolución de módulos sin ModuleNotFoundError)
+# ==============================================================================
 BACKEND_DIR = Path(__file__).resolve().parent
+PARENT_DIR = BACKEND_DIR.parent
+
+# Se inserta backend/ al inicio de sys.path para importaciones directas (ej: "import config")
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-PARENT_DIR = BACKEND_DIR.parent
+# Se inserta la raíz al sys.path por compatibilidad
 if str(PARENT_DIR) not in sys.path:
     sys.path.insert(1, str(PARENT_DIR))
 
@@ -16,7 +21,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Importaciones seguras con fallback
+# Importaciones seguras
 try:
     from config import settings
     from services.gemini_service import GeminiVideoAnalyzer
@@ -27,7 +32,7 @@ try:
         YouTubeError,
         YouTubeUnavailableError,
     )
-except ImportError:
+except ModuleNotFoundError:
     from backend.config import settings
     from backend.services.gemini_service import GeminiVideoAnalyzer
     from backend.services.video_service import VideoProcessor
@@ -138,3 +143,10 @@ async def process_video(
                 "message": f"Error interno en el servidor: {str(e)}",
             },
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
