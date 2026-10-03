@@ -56,21 +56,21 @@ video_processor = VideoProcessor()
 
 
 def download_youtube_video(youtube_url: str, output_dir: Path) -> Path:
-    """Descarga un video de YouTube utilizando yt-dlp evitando la detección de bots."""
+    """Descarga un video de YouTube utilizando yt-dlp evitando la detección de bots en Cloud Run."""
     output_template = str(output_dir / "%(id)s.%(ext)s")
     ydl_opts = {
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": output_template,
         "quiet": True,
         "no_warnings": True,
-        # BYPASS PARA EVITAR EL ERROR EN CLOUD RUN:
+        # CLIENTES MÓVILES PARA EVITAR BLOQUEO DE BOT EN DATA CENTER
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "mweb"]
+                "player_client": ["android_creator", "android_embedded", "ios"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+            "User-Agent": "com.google.android.youtube/17.36.37 (Linux; U; Android 12; gms) gzip"
         }
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
