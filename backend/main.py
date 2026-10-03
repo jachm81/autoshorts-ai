@@ -21,27 +21,16 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Importaciones seguras
-try:
-    from config import settings
-    from services.gemini_service import GeminiVideoAnalyzer
-    from services.video_service import VideoProcessor
-    from services.youtube_service import (
-        YouTubeBotDetectionError,
-        YouTubeDownloader,
-        YouTubeError,
-        YouTubeUnavailableError,
-    )
-except ModuleNotFoundError:
-    from backend.config import settings
-    from backend.services.gemini_service import GeminiVideoAnalyzer
-    from backend.services.video_service import VideoProcessor
-    from backend.services.youtube_service import (
-        YouTubeBotDetectionError,
-        YouTubeDownloader,
-        YouTubeError,
-        YouTubeUnavailableError,
-    )
+# Importaciones directas (sin usar 'backend.' para evitar fallos de resolución)
+from config import settings
+from services.gemini_service import GeminiVideoAnalyzer
+from services.video_service import VideoProcessor
+from services.youtube_service import (
+    YouTubeBotDetectionError,
+    YouTubeDownloader,
+    YouTubeError,
+    YouTubeUnavailableError,
+)
 
 app = FastAPI(title="AutoShorts AI Backend")
 
